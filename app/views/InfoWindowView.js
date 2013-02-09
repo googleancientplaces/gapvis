@@ -1,39 +1,50 @@
 /*
  * TimeMap View
  */
-(function(gv) {
-    var View = gv.View,
-        state = gv.state;
+define(['gv', 'views/BookView', 'views/PlaceFrequencyBarsView'], 
+    function(gv, BookView, PlaceFrequencyBarsView) {
+    
+    var state = gv.state;
     
     // View: InfoWindowView (content for the map infowindow)
-    gv.InfoWindowView = View.extend({
-        tagName: 'div',
+    return BookView.extend({
         className: 'infowindow',
+        template: '#info-window-template',
         
-        initialize: function(opts) {
-            this.template = _.template($('#info-window-template').html());
+        initialize: function() {
+            var view = this;
             // listen for state changes
-            this.bindState('change:placeid', this.render, this);
-            this.bindState('change:pageid', this.renderNextPrevControl, this);
-            this.bindState('change:pageid', this.renderBarHighlight, this);
-            this.bindState('change:mapzoom', this.renderZoomControl, this);
+            view.bindState('change:placeid',    view.render, view);
+            view.bindState('change:pageid',     view.renderNextPrevControl, view);
+            view.bindState('change:pageid',     view.renderBarHighlight, view);
+            view.bindState('change:mapzoom',    view.renderZoomControl, view);
         },
         
         clear: function() {
-            this.freqBars && this.freqBars.clear();
-            View.prototype.clear.call(this);
+            var view = this;
+            view.freqBars && view.freqBars.clear();
+            BookView.prototype.clear.call(view);
         },
         
         // render and update functions
-        
         render: function() {
+            var view = this;
+            view.ready(function() {
+                view.openWindow();
+            })
+        },
+        
+        openWindow: function() {
             var view = this,
                 book = view.model,
                 map = view.map,
                 placeId = state.get('placeid'),
                 place;
-            // if no map or place has been set, give up
-            if (!map || !placeId) {
+            // if no map has been set, give up
+            if (!map) return;
+            // if there's no place selected, close the window
+            if (!placeId) {
+                map.closeBubble();
                 return;
             }
             // get the place
@@ -41,9 +52,9 @@
             // if the place isn't fully loaded, do so
             place.ready(function() {
                 // create content
-                $(view.el).html(view.template(place.toJSON()));
+                view.renderTemplate(place.toJSON());
                 // add frequency bars
-                var freqBars = view.freqBars = new gv.PlaceFrequencyBarsView({
+                var freqBars = view.freqBars = new PlaceFrequencyBarsView({
                     model: book,
                     place: place,
                     el: view.$('div.frequency-bars')[0]
@@ -64,7 +75,6 @@
                 }
                 map.closeInfoBubble.addHandler(handler);
             });
-            return this;
         },
         
         renderZoomControl: function() {
@@ -72,20 +82,24 @@
         },
         
         renderNextPrevControl: function() {
-            var book = this.model,
+            var view = this,
                 pageId = state.get('pageid'),
-                placeId = state.get('placeid'),
-                prev = this.prev = book.prevPlaceRef(pageId, placeId),
-                next = this.next = book.nextPlaceRef(pageId, placeId);
-            this.$('.prev').toggleClass('on', !!prev);
-            this.$('.next').toggleClass('on', !!next);
-            this.$('.controls').toggle(!!(prev || next));
+                placeId = state.get('placeid');
+            view.ready(function() {
+                var book = view.model,
+                    prev = view.prev = book.prevPlaceRef(pageId, placeId),
+                    next = view.next = book.nextPlaceRef(pageId, placeId);
+                view.$('.prev').toggleClass('on', !!prev);
+                view.$('.next').toggleClass('on', !!next);
+                view.$('.controls').toggle(!!(prev || next));
+            });
         },
         
         renderBarHighlight: function() {
-            if (this.freqBars) {
-                this.freqBars.updateHighlight();
-            }
+            var view = this;
+            view.ready(function() {
+                view.freqBars && view.freqBars.updateHighlight();
+            });
         },
         
         getPoint: function() {
@@ -122,8 +136,8 @@
         },
         
         uiGoToPlace: function() {
-            state.set({ 'topview': gv.BookPlaceView });
+            state.set({ 'view': 'place-view' });
         }
     });
     
-}(gv));
+});

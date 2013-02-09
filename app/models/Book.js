@@ -1,38 +1,51 @@
 /*
- * Page models
+ * Book model
  */
-(function(gv) {
-    var Model = gv.Model,
-        Collection = gv.Collection,
-        API_ROOT = gv.settings.API_ROOT,
-        Book;
+define(['gv', 'models/Model', 'models/Places', 'models/Pages'], 
+    function(gv, Model, Places, Pages) {
+    
+    var settings = gv.settings;
        
     // Model: Book
-    Book = gv.Book = Model.extend({
+    return Model.extend({
+        type: 'book',
+        
         defaults: {
             title: "Untitled Book"
         },
         
         url: function() {
-            return API_ROOT + '/books/' + this.id + '.json';
+            return settings.API_ROOT + '/books/' + this.id + '.json';
         },
         
         initialize: function() {
             var book = this,
                 // create collections
-                places = book.places = new gv.PlaceList(),
-                pages = book.pages = new gv.PageList();
+                places = book.places = new Places(),
+                pages = book.pages = new Pages();
             // set backreferences
             places.book = book;
             pages.book = book;
         },
         
+        parse: function(data) {
+            this.initCollections(data.places, data.pages);
+            return data;
+        },
+        
         // reset collections with current data
-        initCollections: function() {
+        initCollections: function(placeData, pageData) {
+            if (DEBUG) console.log('Initializing book ' + this.id + ': ' +
+                pageData.length + ' pages and ' +
+                placeData.length + ' places');
             var places = this.places,
                 pages = this.pages;
-            places.reset(this.get('places'));
-            pages.reset(this.get('pages'));
+            places.reset(placeData);
+            // convert page ids to strings
+            pages.reset(pageData.map(function(p) {
+                p.id = String(p.id);
+                return p;
+            }));
             // calculate frequencies
             pages.each(function(page) {
                 page.get('places').forEach(function(placeId) {
@@ -44,33 +57,8 @@
             places.sort();
         },
         
-        onReady: function() {
-            this.initCollections();
-        },
-        
         isFullyLoaded: function() {
             return !!(this.pages.length && this.places.length);
-        },
-        
-        // get word counts, asynchronously
-        wordsReady: function(callback) {
-            var book = this,
-                url = API_ROOT + '/book/' + this.id + '/words.json';
-            if (!book.get('words')) {
-                $.ajax({
-                    url: url, 
-                    success: function(words) {
-                        book.set({ words: words });
-                        callback();
-                    },
-                    error: function() {
-                        console.error('Problem retrieving words from ' + url)
-                    },
-                    dataType: 'json'
-                });
-            } else {
-                callback();
-            }
         },
         
         // array of page labels for timemap
@@ -124,6 +112,7 @@
         
         // return a google maps API bounding box
         gmapBounds: function() {
+            if (DEBUG && !window.google) return;
             var gmaps = google.maps,
                 placeBounds = this.bounds();
             return new gmaps.LatLngBounds(
@@ -187,19 +176,4 @@
         }
     });
     
-    // Collection: BookList
-    gv.BookList = Collection.extend({
-        model: Book,
-        url: API_ROOT +  '/books/.json',
-        comparator: function(book) {
-            // try for author last name
-            var author = book.get('author')
-                .toLowerCase()
-                .split(/[,(]/)[0]
-                .split(/\s+/)
-                .pop();
-            return author +  book.get('title').toLowerCase(); 
-        }
-    });
-    
-}(gv));
+});

@@ -1,29 +1,22 @@
 /*
  * Core setup for routers
  */
-(function(gv) {
+define(['gv'], function(gv) {
+    var StateRouter = gv.StateRouter,
+        superMethod = StateRouter.prototype.navigate;
     
     // set up default model
-    gv.Router = Backbone.Router.extend({
+    gv.StateRouter = StateRouter.extend({
     
-        // navigate to the current route
-        getRoute: function() {
-            // (override in subclasses)
-            return '';
-        },
-        
-        // update the url based on the current state
-        updateRoute: function() {
-            this.navigate(this.getRoute());
-        },
-        
-        // update the url if this router's view is the top view
-        updateViewRoute: function() {
-            if (this.topview && this.topview == gv.state.get('topview')) {
-                this.updateRoute();
+        navigate: function(route) {
+            if (DEBUG) console.log('(' + this.viewKey + ') Navigating: ' + route);
+            // ping analytics if available
+            if (route && window._gaq) {
+                _gaq.push(['_trackPageview', location.pathname + '#' + route]);
             }
+            superMethod(route);
         }
         
     });
     
-}(gv));
+});

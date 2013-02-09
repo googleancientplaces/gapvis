@@ -1,34 +1,24 @@
 /*
  * TimeMap View
  */
-(function(gv) {
-    var View = gv.View,
-        state = gv.state;
+define(['gv', 'views/BookView', 'views/PlaceFrequencyBarsView'], 
+    function(gv, BookView, PlaceFrequencyBarsView) {
     
-    // View: InfoWindowView (content for the map infowindow)
-    gv.PlaceSummaryView = View.extend({
-        el: '#place-summary-view',
-        
-        initialize: function(opts) {
-            this.template = _.template($('#place-summary-template').html());
-        },
+    var state = gv.state;
+    
+    // View: PlaceSummaryView
+    return BookView.extend({
+        className: 'place-summary-view loading',
+        template: '#place-summary-template',
         
         clear: function() {
             this.freqBars && this.freqBars.clear();
-            View.prototype.clear.call(this);
-        },
-        
-        layout: function() {
-            $('#place-summary-container').height(
-                this.topViewHeight() - $('#book-place-view .book-title-view').height() - 50
-            );
+            BookView.prototype.clear.call(this);
         },
         
         // render and update functions
         
         render: function() {
-            this.bindingLayout();
-            
             var view = this,
                 book = view.model,
                 placeId = state.get('placeid'),
@@ -40,10 +30,11 @@
             // get the place
             place = book.places.get(placeId);
             place.ready(function() {
+                view.$el.removeClass('loading');
                 // create content
-                $(view.el).html(view.template(place.toJSON()));
+                view.renderTemplate(place.toJSON());
                 // add frequency bars
-                var freqBars = view.freqBars = new gv.PlaceFrequencyBarsView({
+                var freqBars = view.freqBars = new PlaceFrequencyBarsView({
                     model: book,
                     place: place,
                     el: view.$('div.frequency-bars')[0]
@@ -60,4 +51,4 @@
         }
     });
     
-}(gv));
+});

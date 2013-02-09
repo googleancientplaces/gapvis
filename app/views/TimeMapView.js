@@ -1,9 +1,8 @@
 /*
  * TimeMap View
  */
-(function(gv) {
-    var View = gv.View,
-        state = gv.state,
+define(['gv', 'views/BookView', 'views/InfoWindowView'], function(gv, BookView, InfoWindowView) {
+    var state = gv.state,
         settings = gv.settings,
         // map styles
         mapStyle = settings.mapStyle,
@@ -27,57 +26,51 @@
         ];
     
     // View: TimemapView
-    gv.TimeMapView = View.extend({
-        el: '#timemap-view',
+    return BookView.extend({
+        className: 'timemap-view panel fill',
+        template: '#timemap-template',
         
         initialize: function() {
             var view = this;
-            view.template = $('#timemap-template').html();
-            view.infoWindowView = new gv.InfoWindowView({ model: view.model });
-            // listen for state changes
-            view.bindState('change:pageid', this.updateTimeline, this);
-            view.bindState('change:mapzoom', this.updateMapZoom, this);
-            view.bindState('change:mapcenter', this.updateMapCenter, this);
-            view.bindState('change:maptypeid', this.updateMapTypeId, this);
-            view.bindState('change:autoplay', this.updateAutoplay, this);
-            view.bindState('change:autoplay', this.renderAutoplayControls, this);
-            // cancel autoplay on other UI events
-            view.bindState('change:topview', this.stopAutoplay, this);
-            view.bindState('change:placeid', this.stopAutoplay, this);
-            view.bindState('change:pageid', this.stopAutoplay, this);
+            view.infoWindowView = new InfoWindowView();
         },
         
         clear: function() {
             this.infoWindowView.clear();
-            View.prototype.clear.call(this);
+            BookView.prototype.clear.call(this);
         },
         
-        layout: function() {
-            $(this.el).height(
-                this.topViewHeight() * .8 - 29
+        getLabeller: function() {
+            var view = this;
+            view.labelUtils = view.labelUtils || new LabelUtils(
+                bandInfo, view.model.labels(), function() { return false; }
             );
+            return view.labelUtils;
         },
         
         render: function() {
-            $(this.el).html(this.template);
-            this.bindingLayout();
-            
             var view = this,
                 book = view.model,
                 // create themes by frequency
                 colorScale = d3.scale.quantize()
                     .domain([1, book.places.first().get('frequency')])
                     .range(colorThemes),
-                // add custom labeller
-                labelUtils = view.labelUtils = new LabelUtils(
-                    bandInfo, book.labels(), function() { return false; }
-                );
+                labelUtils = view.getLabeller();
             
-            // make legend
-            colorThemes.forEach(function(theme) {
-                var img = theme.eventIcon;
-                this.$('span.images').append('<img src="' + img + '">');
-            });
+            // listen for state changes
+            view.bindState('change:pageid',     view.updateTimeline, view);
+            view.bindState('change:mapzoom',    view.updateMapZoom, view);
+            view.bindState('change:mapcenter',  view.updateMapCenter, view);
+            view.bindState('change:maptypeid',  view.updateMapTypeId, view);
+            view.bindState('change:autoplay',   view.updateAutoplay, view);
+            view.bindState('change:autoplay',   view.renderAutoplayControls, view);
+            // cancel autoplay on other UI events
+            view.bindState('change:topview',    view.stopAutoplay, view);
+            view.bindState('change:placeid',    view.stopAutoplay, view);
+            view.bindState('change:pageid',     view.stopAutoplay, view);
+            
+            // render template HTML
+            view.$el.html(view.template);
             
             // custom info window function
             function openPlaceWindow() {
@@ -114,115 +107,121 @@
                 mapZoom = state.get('mapzoom'),
                 mapBounds = !(mapCenter && mapZoom) ? book.gmapBounds() : null;
             
-            var tm = this.tm = TimeMap.init({
-                mapId: "map",
-                timelineId: "timeline",
-                options: {
-                    openInfoWindow: openPlaceWindow,
-                    closeInfoWindow: $.noop,
-                    mapCenter: mapCenter,
-                    mapZoom: mapZoom,
-                    centerOnItems: false
-                },
-                datasets: [
-                    {
-                        id: "places",
-                        theme: TimeMapTheme.createCircleTheme(),
-                        type: "progressive",
-                        type: "progressive",
-                        options: {
-                            start: labelUtils.getStartDate(),
-                            // cutoff dates for data
-                            dataMinDate: labelUtils.getStartDate(),
-                            dataMaxDate: labelUtils.getEndDate(),
-                            // 30 yrs in milliseconds
-                            interval: 946684806845,   
-                            // function to turn date into string appropriate for service
-                            formatUrl: implFormatUrl,
-                            // custom loader
-                            loader: new InMemoryProgressiveLoader({
-                                // standard loader options
-                                transformFunction: function(item) {
-                                    var theme = colorScale(item.options.place.get('frequency')),
-                                        opts = item.options,
-                                        size = 18,
-                                        color = theme.color,
-                                        gmaps = google.maps;
-                                    // set start
-                                    item.start = labelUtils.getLabelIndex(item.options.page.id) + ' AD';
-                                    // set theme
-                                    opts.theme = theme;
-                                    // set marker images
-                                    opts.markerImages = ['ff', 'cc', '99', '66', '33']
-                                        .map(function(alpha) {
-                                            var url = TimeMapTheme.getCircleUrl(size, color, alpha);
-                                            return new gmaps.MarkerImage(
-                                                url,
-                                                new gmaps.Size(size, size),
-                                                undefined,
-                                                new gmaps.Point(size/2, size/2)
-                                            );
-                                        });
-                                    return item;
-                                }
-                            })
+            // this is an admittedly ugly way to init the timemap after its container
+            // has been added to the DOM
+            setTimeout(function() {
+            
+                var tm = view.tm = TimeMap.init({
+                    mapSelector: view.$(".map"),
+                    timelineSelector: view.$(".timeline"),
+                    options: {
+                        openInfoWindow: openPlaceWindow,
+                        closeInfoWindow: $.noop,
+                        mapCenter: mapCenter,
+                        mapZoom: mapZoom,
+                        centerOnItems: false
+                    },
+                    datasets: [
+                        {
+                            id: "places",
+                            theme: TimeMapTheme.createCircleTheme(),
+                            type: "progressive",
+                            type: "progressive",
+                            options: {
+                                start: labelUtils.getStartDate(),
+                                // cutoff dates for data
+                                dataMinDate: labelUtils.getStartDate(),
+                                dataMaxDate: labelUtils.getEndDate(),
+                                // 30 yrs in milliseconds
+                                interval: 946684806845,   
+                                // function to turn date into string appropriate for service
+                                formatUrl: implFormatUrl,
+                                // custom loader
+                                loader: new InMemoryProgressiveLoader({
+                                    // standard loader options
+                                    transformFunction: function(item) {
+                                        var theme = colorScale(item.options.place.get('frequency')),
+                                            opts = item.options,
+                                            size = 18,
+                                            color = theme.color,
+                                            gmaps = google.maps;
+                                        // set start
+                                        item.start = labelUtils.getLabelIndex(item.options.page.id) + ' AD';
+                                        // set theme
+                                        opts.theme = theme;
+                                        // set marker images
+                                        opts.markerImages = ['ff', 'cc', '99', '66', '33']
+                                            .map(function(alpha) {
+                                                var url = TimeMapTheme.getCircleUrl(size, color, alpha);
+                                                return new gmaps.MarkerImage(
+                                                    url,
+                                                    new gmaps.Size(size, size),
+                                                    undefined,
+                                                    new gmaps.Point(size/2, size/2)
+                                                );
+                                            });
+                                        return item;
+                                    }
+                                })
+                            }
                         }
-                    }
-                ],
-                bands: bandInfo
-            });
-            
-            // the load is synchronous, so we have to call after TimeMap.init()
-            view.scrollTo(state.get('pageid') || view.model.firstId());
-            view.updateMapTypeId();
-            
-            // set the map to our custom style
-            var gmap = tm.getNativeMap();
-            gmap.setOptions({
-                styles: mapStyle
-            });
-            
-            // set bounds if necessary
-            if (mapBounds) {
-                gmap.fitBounds(mapBounds);
-            }
-            
-            // create info window view
-            view.infoWindowView.map = tm.map;
-            view.infoWindowView.render();
-            
-            // set UI listeners for map
-            tm.map.endPan.addHandler(function() {
-                state.set({ mapcenter: tm.map.getCenter() })
-            });
-            tm.map.changeZoom.addHandler(function() {
-                state.set({ mapzoom: tm.map.getZoom() })
-            });
-            // have to do this with the native map
-            var gmap = tm.getNativeMap();
-            google.maps.event.addListener(gmap, 'maptypeid_changed', function() {
-                state.set({ maptypeid: gmap.getMapTypeId() });
-            });
-            
-            // set up fade filter
-            tm.addFilter("map", function(item) {
-                var topband = tm.timeline.getBand(0),
-                    maxVisibleDate = topband.getMaxVisibleDate().getTime(),
-                    minVisibleDate = topband.getMinVisibleDate().getTime(),
-                    images = item.opts.markerImages,
-                    pos = Math.floor(
-                        (maxVisibleDate - item.getStartTime()) / (maxVisibleDate - minVisibleDate)
-                        * images.length
-                    );
-                // set image according to timeline position
-                if (pos >= 0 && pos < images.length) {
-                    item.getNativePlacemark().setIcon(images[pos]);
+                    ],
+                    bands: bandInfo
+                });
+                
+                // the load is synchronous, so we have to call after TimeMap.init()
+                view.scrollTo(state.get('pageid') || view.model.firstId());
+                view.updateMapTypeId();
+                
+                // set the map to our custom style
+                var gmap = tm.getNativeMap();
+                gmap.setOptions({
+                    styles: mapStyle
+                });
+                
+                // set bounds if necessary
+                if (mapBounds) {
+                    gmap.fitBounds(mapBounds);
                 }
-                return true;
-            });
-            // run filter immediately to update images
-            tm.filter('map');
-            tm.timeline.layout();
+                
+                // create info window view
+                view.infoWindowView.map = tm.map;
+                view.infoWindowView.render();
+                
+                // set UI listeners for map
+                tm.map.endPan.addHandler(function() {
+                    state.set({ mapcenter: tm.map.getCenter() })
+                });
+                tm.map.changeZoom.addHandler(function() {
+                    state.set({ mapzoom: tm.map.getZoom() })
+                });
+                // have to do this with the native map
+                var gmap = tm.getNativeMap();
+                google.maps.event.addListener(gmap, 'maptypeid_changed', function() {
+                    state.set({ maptypeid: gmap.getMapTypeId() });
+                });
+                
+                // set up fade filter
+                tm.addFilter("map", function(item) {
+                    var topband = tm.timeline.getBand(0),
+                        maxVisibleDate = topband.getMaxVisibleDate().getTime(),
+                        minVisibleDate = topband.getMinVisibleDate().getTime(),
+                        images = item.opts.markerImages,
+                        pos = Math.floor(
+                            (maxVisibleDate - item.getStartTime()) / (maxVisibleDate - minVisibleDate)
+                            * images.length
+                        );
+                    // set image according to timeline position
+                    if (pos >= 0 && pos < images.length) {
+                        item.getNativePlacemark().setIcon(images[pos]);
+                    }
+                    return true;
+                });
+                // run filter immediately to update images
+                tm.filter('map');
+                tm.timeline.layout();
+            
+            }, 0);
             
             return this;
         },
@@ -230,8 +229,8 @@
         renderAutoplayControls: function() {
             var playing = state.get('autoplay');
             // render
-            $('#timeline-play').toggleClass('on', !playing);
-            $('#timeline-stop').toggleClass('on', playing);
+            this.$('.timeline-play').toggleClass('on', !playing);
+            this.$('.timeline-stop').toggleClass('on', playing);
         },
         
         // UI update functions
@@ -299,7 +298,8 @@
         // go to a specific page
         scrollTo: function(pageId, animate) {
             var view = this,
-                d = view.labelUtils.labelToDate(pageId);
+                labelUtils = view.getLabeller(), 
+                d = labelUtils.labelToDate(pageId);
             // stop anything that's running
             if (view.animation) {
                 view.animation.stop();
@@ -322,8 +322,8 @@
         // UI Event Handlers
         
         events: {
-            'click #timeline-play': 'startAutoplay',
-            'click #timeline-stop': 'stopAutoplay'
+            'click .timeline-play': 'startAutoplay',
+            'click .timeline-stop': 'stopAutoplay'
         },
         
         startAutoplay: function() {
@@ -335,4 +335,4 @@
         }
     });
     
-}(gv));
+});

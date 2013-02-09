@@ -1,0 +1,3 @@
+[submodule "lib/backbone-spf"]
+	path = lib/backbone-spf
+	url = https://github.com/nrabinowitz/backbone-spf

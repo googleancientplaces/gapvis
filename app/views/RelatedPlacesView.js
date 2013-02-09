@@ -1,13 +1,12 @@
 /*
  * Related Places View
  */
-(function(gv) {
-    var View = gv.View,
-        state = gv.state;
+define(['gv', 'views/BookView'], function(gv, BookView) {
+    var state = gv.state;
     
     // View: RelatedPlacesView (list of related places based on collocation)
-    gv.RelatedPlacesView = View.extend({
-        el: '#related-places-view',
+    return BookView.extend({
+        className: 'related-places-view',
         
         // render and update functions
         
@@ -23,12 +22,12 @@
             place.ready(function() {
                 var related = place.related(book).slice(0, gv.settings.relatedCount);
                 // create content
-                $(view.el).append('<h4>Top Related Places</h4>');
+                view.$el.append('<h4>Top Related Places</h4>');
                 related.forEach(function(r) {
                     $('<p><span class="place" data-place-id="' + 
                         r.place.id + '">' + r.place.get('title') +
                         '</span> (' + r.count + ')</p>').appendTo(view.el);
-                })
+                });
             });
             return this;
         },
@@ -42,9 +41,10 @@
         uiPlaceClick: function(e) {
             var placeId = $(e.target).attr('data-place-id');
             if (placeId) {
-                state.setSerialized('placeid', placeId);
+                state.set('placeid', placeId);
+                gv.app.updateView(true);
             }
         }
     });
     
-}(gv));
+});
